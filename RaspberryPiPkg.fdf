@@ -232,13 +232,25 @@ READ_LOCK_STATUS   = TRUE
   #
   INF MdeModulePkg/Universal/Disk/DiskIoDxe/DiskIoDxe.inf
   INF MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
-  INF FatPkg/EnhancedFatDxe/Fat.inf
   INF MdeModulePkg/Universal/Disk/UnicodeCollation/EnglishDxe/EnglishDxe.inf
+  INF RaspberryPiPkg/Drivers/RamDiskDxe/RamDiskDxe.inf
+  INF FatPkg/EnhancedFatDxe/Fat.inf
 
   #
   # UEFI application (Shell Embedded Boot Loader)
   #
   INF ShellPkg/Application/Shell/Shell.inf
+
+  #
+  # EBC. Why not... Sadly, went nowhere because Intel
+  # thought they had to monetize the EBC compiler, and no
+  # one else (yet) ported an OSS C compiler to support
+  # the architecture.
+  #
+  # But hey, at least there's an OSS assembler now!
+  # https://github.com/pbatard/fasmg-ebc
+  #
+  INF MdeModulePkg/Universal/EbcDxe/EbcDxe.inf
 
   #
   # ACPI Support

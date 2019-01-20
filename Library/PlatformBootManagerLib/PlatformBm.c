@@ -5,6 +5,7 @@
  *  Copyright (c) 2004 - 2016, Intel Corporation. All rights reserved.
  *  Copyright (c) 2016, Linaro Ltd. All rights reserved.
  *  Copyright (c) 2017 - 2018, Andrei Warkentin <andrey.warkentin@gmail.com>
+ *  Copyright (c) 2018, Pete Batard <pete@akeo.ie>
  *
  *  This program and the accompanying materials
  *  are licensed and made available under the terms and conditions of the BSD License
@@ -55,14 +56,9 @@ typedef struct {
 } PLATFORM_USB_DEV;
 
 typedef struct {
-  VENDOR_DEVICE_PATH            Custom;
-  EFI_DEVICE_PATH_PROTOCOL      EndDevicePath;
+  VENDOR_DEVICE_PATH       Custom;
+  EFI_DEVICE_PATH_PROTOCOL EndDevicePath;
 } PLATFORM_SD_DEV;
-
-#define DW_USB_DXE_FILE_GUID { \
-          0x4bf1704c, 0x03f4, 0x46d5, \
-          { 0xbc, 0xa6, 0x82, 0xfa, 0x58, 0x0b, 0xad, 0xfd } \
-          }
 
 #define ARASAN_MMC_DXE_FILE_GUID { \
           0x100c2cfa, 0xb586, 0x4198, \
@@ -72,6 +68,11 @@ typedef struct {
 #define SDHOST_MMC_DXE_FILE_GUID { \
           0x58abd787, 0xf64d, 0x4ca2, \
           { 0xa0, 0x34, 0xb9, 0xac, 0x2d, 0x5a, 0xd0, 0xcf } \
+          }
+
+#define SERIAL_DXE_FILE_GUID { \
+          0xD3987D4B, 0x971A, 0x435F, \
+          { 0x8C, 0xAF, 0x49, 0x67, 0xEB, 0x62, 0x72, 0x41 } \
           }
 
 STATIC PLATFORM_SD_DEV mArasan = {
@@ -109,45 +110,6 @@ STATIC PLATFORM_SD_DEV mSDHost = {
     DP_NODE_LEN (EFI_DEVICE_PATH_PROTOCOL)
   }
 };
-
-STATIC PLATFORM_USB_DEV mUsbHubPort = {
-  //
-  // VENDOR_DEVICE_PATH DwUsbHostDxe
-  //
-  {
-    { HARDWARE_DEVICE_PATH, HW_VENDOR_DP, DP_NODE_LEN (VENDOR_DEVICE_PATH) },
-    DW_USB_DXE_FILE_GUID
-  },
-
-  //
-  // USB_DEVICE_PATH Hub
-  //
-  {
-    { MESSAGING_DEVICE_PATH, MSG_USB_DP, DP_NODE_LEN (USB_DEVICE_PATH) },
-    0, 0
-  },
-
-  //
-  // USB_DEVICE_PATH Dev
-  //
-  {
-    { MESSAGING_DEVICE_PATH, MSG_USB_DP, DP_NODE_LEN (USB_DEVICE_PATH) },
-    1, 0
-  },
-
-  //
-  // EFI_DEVICE_PATH_PROTOCOL End
-  //
-  {
-    END_DEVICE_PATH_TYPE, END_ENTIRE_DEVICE_PATH_SUBTYPE,
-    DP_NODE_LEN (EFI_DEVICE_PATH_PROTOCOL)
-  }
-};
-
-#define SERIAL_DXE_FILE_GUID { \
-          0xD3987D4B, 0x971A, 0x435F, \
-          { 0x8C, 0xAF, 0x49, 0x67, 0xEB, 0x62, 0x72, 0x41 } \
-          }
 
 STATIC PLATFORM_SERIAL_CONSOLE mSerialConsole = {
   //
@@ -449,9 +411,62 @@ PlatformRegisterFvBootOption (
   return OptionIndex;
 }
 
+STATIC VOID
+RemoveStaleBootOptions (
+  VOID
+  )
+{
+  EFI_BOOT_MANAGER_LOAD_OPTION *BootOptions;
+  UINTN                        BootOptionCount;
+  UINTN                        Index;
+  EFI_STATUS                   Status;
 
-STATIC
-VOID
+  BootOptions = EfiBootManagerGetLoadOptions (&BootOptionCount,
+                                              LoadOptionTypeBoot);
+
+  for (Index = 0; Index < BootOptionCount; ++Index) {
+    EFI_DEVICE_PATH_PROTOCOL *DevicePath = BootOptions[Index].FilePath;
+
+    if (CompareMem (&mArasan, DevicePath, GetDevicePathSize (DevicePath)) == 0) {
+      if (PcdGet32 (PcdSdIsArasan)) {
+        continue;
+      }
+    } else if (CompareMem (&mSDHost, DevicePath, GetDevicePathSize (DevicePath)) == 0) {
+      if (!PcdGet32 (PcdSdIsArasan)) {
+        continue;
+      }
+    } else {
+      continue;
+    }
+
+    //
+    // Delete the boot options corresponding to stale SD controllers.
+    //
+    Status = EfiBootManagerDeleteLoadOptionVariable (
+               BootOptions[Index].OptionNumber, LoadOptionTypeBoot);
+    DEBUG_CODE (
+      CHAR16 *DevicePathString;
+
+      DevicePathString = ConvertDevicePathToText(BootOptions[Index].FilePath,
+                           FALSE, FALSE);
+      DEBUG ((
+        EFI_ERROR (Status) ? EFI_D_WARN : EFI_D_INFO,
+        "%a: removing stale Boot#%04x %s: %r\n",
+        __FUNCTION__,
+        (UINT32)BootOptions[Index].OptionNumber,
+        DevicePathString == NULL ? L"<unavailable>" : DevicePathString,
+        Status
+        ));
+      if (DevicePathString != NULL) {
+        FreePool (DevicePathString);
+      }
+      );
+  }
+
+  EfiBootManagerFreeLoadOptions (BootOptions, BootOptionCount);
+}
+
+STATIC VOID
 PlatformRegisterOptionsAndKeys (
   VOID
   )
@@ -462,6 +477,8 @@ PlatformRegisterOptionsAndKeys (
   EFI_INPUT_KEY                Esc;
   EFI_BOOT_MANAGER_LOAD_OPTION BootOption;
   INTN ShellOption;
+
+  RemoveStaleBootOptions ();
 
   ShellOption = PlatformRegisterFvBootOption (&gUefiShellFileGuid, L"UEFI Shell",
                                               LOAD_OPTION_ACTIVE);
@@ -655,7 +672,6 @@ PlatformBootManagerAfterConsole (
   VOID
   )
 {
-  UINTN Index;
   ESRT_MANAGEMENT_PROTOCOL      *EsrtManagement;
   EFI_STATUS                    Status;
   EFI_HANDLE SerialHandle;
@@ -692,26 +708,6 @@ PlatformBootManagerAfterConsole (
     Status = ProcessCapsules ();
     DEBUG((DEBUG_INFO, "ProcessCapsules returned %r\n", Status));
   }
-
-  for (Index = 1; Index < 5; Index++) {
-    UINT16 Desc[11];
-    /*
-     * Add boot options to allow booting from
-     * a mass storage device plugged into any
-     * of the RPi USB ports.
-     */
-    mUsbHubPort.Dev.ParentPortNumber = Index;
-    UnicodeSPrint(Desc, sizeof (Desc), L"USB Port %u", Index);
-    PlatformRegisterBootOption ((VOID *) &mUsbHubPort,
-                                Desc, LOAD_OPTION_ACTIVE);
-  }
-
-  PlatformRegisterBootOption ((VOID *) &mSDHost,
-                              L"uSD on SD Host",
-                              LOAD_OPTION_ACTIVE);
-  PlatformRegisterBootOption ((VOID *) &mArasan,
-                              L"uSD on Arasan MMC Host",
-                              LOAD_OPTION_ACTIVE);
 
   PlatformRegisterOptionsAndKeys ();
 }
@@ -767,5 +763,61 @@ PlatformBootManagerWaitCallback (
     };
 
     gST->ConOut->ClearScreen (gST->ConOut);
+  }
+}
+
+/**
+  The function is called when no boot option could be launched,
+  including platform recovery options and options pointing to applications
+  built into firmware volumes.
+  If this function returns, BDS attempts to enter an infinite loop.
+**/
+VOID
+EFIAPI
+PlatformBootManagerUnableToBoot(
+  VOID
+  )
+{
+  EFI_STATUS                   Status;
+  EFI_INPUT_KEY                Key;
+  EFI_BOOT_MANAGER_LOAD_OPTION BootManagerMenu;
+  UINTN                        Index;
+  //
+  // BootManagerMenu doesn't contain the correct information when return status
+  // is EFI_NOT_FOUND.
+  //
+  Status = EfiBootManagerGetBootManagerMenu(&BootManagerMenu);
+  if (EFI_ERROR(Status)) {
+    return;
+  }
+  //
+  // Normally BdsDxe does not print anything to the system console, but this is
+  // a last resort -- the end-user will likely not see any DEBUG messages
+  // logged in this situation.
+  //
+  // AsciiPrint() will NULL-check gST->ConOut internally. We check gST->ConIn
+  // here to see if it makes sense to request and wait for a keypress.
+  //
+  if (gST->ConIn != NULL) {
+    AsciiPrint(
+      "%a: No bootable option or device was found.\n"
+      "%a: Press any key to enter the Boot Manager Menu.\n",
+      gEfiCallerBaseName,
+      gEfiCallerBaseName
+    );
+    Status = gBS->WaitForEvent(1, &gST->ConIn->WaitForKey, &Index);
+    ASSERT_EFI_ERROR(Status);
+    ASSERT(Index == 0);
+    //
+    // Drain any queued keys.
+    //
+    while (!EFI_ERROR(gST->ConIn->ReadKeyStroke(gST->ConIn, &Key))) {
+      //
+      // just throw away Key
+      //
+    }
+  }
+  for (;;) {
+    EfiBootManagerBoot(&BootManagerMenu);
   }
 }

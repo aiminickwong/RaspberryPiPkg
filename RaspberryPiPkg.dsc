@@ -571,7 +571,19 @@ DEFINE HYP_LOG_MASK = 0xffffffff
   MdeModulePkg/Universal/Disk/DiskIoDxe/DiskIoDxe.inf
   MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
   MdeModulePkg/Universal/Disk/UnicodeCollation/EnglishDxe/EnglishDxe.inf
+  RaspberryPiPkg/Drivers/RamDiskDxe/RamDiskDxe.inf
   FatPkg/EnhancedFatDxe/Fat.inf
+
+  #
+  # EBC. Why not... Sadly, went nowhere because Intel
+  # thought they had to monetize the EBC compiler, and no
+  # one else (yet) ported an OSS C compiler to support
+  # the architecture.
+  #
+  # But hey, at least there's an OSS assembler now!
+  # https://github.com/pbatard/fasmg-ebc
+  #
+  MdeModulePkg/Universal/EbcDxe/EbcDxe.inf
 
   #
   # ACPI Support
@@ -600,6 +612,7 @@ DEFINE HYP_LOG_MASK = 0xffffffff
     <LibraryClasses>
       NULL|MdeModulePkg/Library/DeviceManagerUiLib/DeviceManagerUiLib.inf
       NULL|MdeModulePkg/Library/BootManagerUiLib/BootManagerUiLib.inf
+      NULL|RaspberryPiPkg/Library/PlatformUiAppLib/PlatformUiAppLib.inf
       NULL|MdeModulePkg/Library/BootMaintenanceManagerUiLib/BootMaintenanceManagerUiLib.inf
   }
 

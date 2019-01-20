@@ -1,14 +1,14 @@
 64-bit Tiano Core UEFI for the Raspberry Pi 3
 =============================================
 
-Last updated Oct 1st, 2018.
+Last updated Jan 16th, 2018.
 
 This is a port of 64-bit Tiano Core UEFI firmware for the Pi 3/3B+ platforms,
 based on [Ard Bisheuvel's 64-bit](http://www.workofard.com/2017/02/uefi-on-the-pi/)
 and [Microsoft's 32-bit](https://github.com/ms-iot/RPi-UEFI/tree/ms-iot/Pi3BoardPkg) implementations.
 
 Initially, this was supposed to be an easy walk in the park, where
-the Microsoft drivers just sorta slid into Ard's UEFI implementation,
+the Microsoft drivers somewhat slid into Ard's UEFI implementation,
 and I would call it a day. Instead, it turned out to be a severely more
 frustrating experience :-).
 
@@ -27,6 +27,9 @@ pass for an SBSA + SBBR system ;-).
 
 # Latest Status
 
+* 2019 Jam 16th: boot options fixes, _CCA, supported firmware for Windows MCCI driver.
+* 2019 Jan 14th: boot option cleanup, EBC, release, SPCR fix (Windows EMS support)
+* 2018 Nov 17th: Display, USB, GraphicsConsole, VirtualRealTimeClockLib improvements, edk2 rebase.
 * 2018 Oct 1st: Rhxp and PEP devices in ACPI, (untested) JTAG support via debug configuration menu.
 * 2018 Sep 29th: MsftFunctionConfig ACPI descriptors.
 * 2018 Sep 28th: SMBIOS nits, clear screen before boot, SPCR InterruptType, DWC_OTG range and extra _CID.
@@ -105,9 +108,11 @@ for the RPi3.
 
 This is the last known good edk2 commit:
 ```
-commit 989f7a2cf0e27123fda5ca538b15832e115e0f4e
-Author: cinnamon shia <cinnamon.shia@hpe.com>
-Date:   Fri May 11 23:21:12 2018 +0800
+commit 66127011a544b90e800eb3619e84c2f94a354903
+Author: Ard Biesheuvel <ard.biesheuvel@linaro.org>
+Date:   Wed Nov 14 11:27:24 2018 -0800
+
+    ArmPkg/ArmGicDxe ARM: fix encoding for GICv3 interrupt acknowledge
 ```
 
 You should rewind your edk2 tree to this commit. Here be dragons!
@@ -130,6 +135,8 @@ the additional directions under [`Binary/atf/readme.md`](Binary/atf/readme.md).
 # Using
 
 ## Basic
+
+**Please USE AN ADEQUATE POWER SUPPLY. Many people have had problems with poor performance (CPU underclocking itself to 600MHz) and other errors and issues (e.g. with USB) caused by an inadequate power supply. Recommended: 5V 3A. Many cheapo 2.5A power bricks can't really provide 2.5A. If you see a lightning bolt in the top right corner of the screen you have inadequate power.**
 
 UEFI boot media can be a uSD card or USB mass storage, if you've enabled USB booting previously in the OTP (i.e. via `program_usb_boot_mode=1`).
 
@@ -161,8 +168,11 @@ USB keyboard support has been validated with a few keyboards:
 - Microsoft Natural Ergonomic Keyboard 4000
 - An Apple keyboard (chicklet, USB2 hub)
 
-The boot order is hardcoded to first be the USB ports and then the uSD card.
-If there are no bootable media, you should be looking at the UEFI Shell.
+The first time you boot, you will be looking at the UEFI Shell. 'exit'
+and modify the boot order. The boot order will persist across reboots.
+The boot manager will only list devices available to boot from
+(older versions had USB Port 0, USB Port 1, etc).
+
 ESC enters setup. F1 always boots the UEFI Shell.
 
 ![FrontPage](readme1.png)
@@ -328,10 +338,34 @@ enough. Finally, you may wish to be able to boot your Pi
 headless, yet be able to attach a display to it later for
 debugging.
 
-To accomodate these issues, the following extra lines
+To accommodate these issues, the following extra lines
 are recommended for your `config.txt`:
 - `hdmi_force_hotplug=1` to allow plugging in video after system is booted.
-- `hdmi_group=1` and `hdmi_mode=4` to force a specific mode, both to accomodate late-plugged screens or buggy/slow screens. See [official documentation](https://www.raspberrypi.org/documentation/configuration/config-txt/video.md) to make sense of these parameters (example above sets up 720p 60Hz).
+- `hdmi_group=1` and `hdmi_mode=4` to force a specific mode, both to accommodate late-plugged screens or buggy/slow screens. See [official documentation](https://www.raspberrypi.org/documentation/configuration/config-txt/video.md) to make sense of these parameters (example above sets up 720p 60Hz).
+
+While the VC firmware is reponsible for setting the physical resolution,
+the virtual resolution the GPU framebuffer uses may be different and it
+scales the video appropriately. By default, the UEFI framebuffer driver
+makes available the following virtual resolutions:
+- 640x480 (32bpp)
+- 800x600 (32bpp)
+- 1024x768 (32bpp)
+- 1280x720 (32bpp)
+- 1920x1080 (32bpp)
+- native physical resolution (32bpp)
+
+Note that this lets you do weird stuff, like pretending to have 1080p while
+connected to a TV. Sometimes blurry is better than nothing...
+
+Note: the VC framebuffer is a bit weird and will change physical locations
+      depending on virtual resolution chosen. Some UEFI applications or
+      OS loaders may violate the GOP spec and never refresh the framebuffer
+      addressing after setting the mode. You can completely disable
+      multiple virtual resolution support:
+- go to `Device Manager`
+- go to `Raspberry Pi Configuration`
+- go to `Display`
+- configure `Resolutions` to `Only native resolution`
 
 ## NVRAM
 
