@@ -15,14 +15,27 @@
 #include <Guid/HiiPlatformSetupFormset.h>
 #include "ConfigDxeFormSetGuid.h"
 
+#pragma pack(1)
 typedef struct {
   /*
-   * 0 - One mode for the boot resolution.
-   * 1 - Adds additional "typical" resolutions like
-   *     640x480, 800x600, 1024 x 768, 720p and 1080p.
+   * One bit for each scaled resolution supported,
+   * these are ordered exactly like mGopModeData
+   * in DisplayDxe.
+   *
+   * 800x600, 640x480, 1024 x 768, 720p, 1080p, native.
    */
-   UINT32 Enable;
-} DISPLAY_ENABLE_VMODES_VARSTORE_DATA;
+   UINT8 v800   : 1;
+   UINT8 v640   : 1;
+   UINT8 v1024  : 1;
+   UINT8 v720p  : 1;
+   UINT8 v1080p : 1;
+   UINT8 Physical : 1;
+} DISPLAY_ENABLE_SCALED_VMODES_VARSTORE_DATA;
+#pragma pack()
+
+typedef struct {
+   UINT8 Index;
+} DISPLAY_LOGO_INDEX_VARSTORE_DATA;
 
 typedef struct {
   /*
@@ -76,6 +89,10 @@ typedef struct {
    */
   UINT32 Clock;
 } CHIPSET_CPU_CLOCK_VARSTORE_DATA;
+
+typedef struct {
+  UINT32 Clock;
+} CHIPSET_CUSTOM_CPU_CLOCK_RATE_VARSTORE_DATA;
 
 typedef struct {
   /*
@@ -162,6 +179,11 @@ formset
       name  = CpuClock,
       guid  = CONFIGDXE_FORM_SET_GUID;
 
+    efivarstore CHIPSET_CUSTOM_CPU_CLOCK_RATE_VARSTORE_DATA,
+      attribute = EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS | EFI_VARIABLE_NON_VOLATILE,
+      name  = CustomCpuClockRate,
+      guid  = CONFIGDXE_FORM_SET_GUID;
+
     efivarstore CHIPSET_SD_VARSTORE_DATA,
       attribute = EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS | EFI_VARIABLE_NON_VOLATILE,
       name  = SdIsArasan,
@@ -202,14 +224,19 @@ formset
       name  = DebugShowUEFIExit,
       guid  = CONFIGDXE_FORM_SET_GUID;
 
-    efivarstore DISPLAY_ENABLE_VMODES_VARSTORE_DATA,
+    efivarstore DISPLAY_ENABLE_SCALED_VMODES_VARSTORE_DATA,
       attribute = EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS | EFI_VARIABLE_NON_VOLATILE,
-      name  = DisplayEnableVModes,
+      name  = DisplayEnableScaledVModes,
       guid  = CONFIGDXE_FORM_SET_GUID;
 
     efivarstore DISPLAY_ENABLE_SSHOT_VARSTORE_DATA,
       attribute = EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS | EFI_VARIABLE_NON_VOLATILE,
       name  = DisplayEnableSShot,
+      guid  = CONFIGDXE_FORM_SET_GUID;
+
+    efivarstore DISPLAY_LOGO_INDEX_VARSTORE_DATA,
+      attribute = EFI_VARIABLE_BOOTSERVICE_ACCESS | EFI_VARIABLE_RUNTIME_ACCESS | EFI_VARIABLE_NON_VOLATILE,
+      name  = DisplayLogoIndex,
       guid  = CONFIGDXE_FORM_SET_GUID;
 
     form formid = 1,
@@ -289,7 +316,19 @@ formset
             option text = STRING_TOKEN(STR_CHIPSET_CLOCK_CPU_NA), value = 0, flags = DEFAULT;
             option text = STRING_TOKEN(STR_CHIPSET_CLOCK_CPU_600MHZ), value = 1, flags = 0;
             option text = STRING_TOKEN(STR_CHIPSET_CLOCK_CPU_MAX), value = 2, flags = 0;
+            option text = STRING_TOKEN(STR_CHIPSET_CLOCK_CPU_CUSTOM), value = 3, flags = 0;
         endoneof;
+
+        grayoutif NOT ideqval CpuClock.Clock == 3;
+          numeric varid = CustomCpuClockRate.Clock,
+              prompt  = STRING_TOKEN(STR_CHIPSET_CUSTOM_CPU_CLOCK_RATE_PROMPT),
+              help    = STRING_TOKEN(STR_CHIPSET_CUSTOM_CPU_CLOCK_RATE_HELP),
+              flags   = DISPLAY_UINT_DEC | NUMERIC_SIZE_4 | INTERACTIVE | RESET_REQUIRED,
+              minimum = 100,
+              maximum = 1600,
+              default = 600,
+          endnumeric;
+        endif;
 
         oneof varid = SdIsArasan.Routing,
             prompt      = STRING_TOKEN(STR_CHIPSET_SD_PROMPT),
@@ -351,13 +390,47 @@ formset
         title  = STRING_TOKEN(STR_DISPLAY_FORM_TITLE);
         subtitle text = STRING_TOKEN(STR_DISPLAY_FORM_SUBTITLE);
 
-        oneof varid = DisplayEnableVModes.Enable,
-            prompt      = STRING_TOKEN(STR_DISPLAY_VMODES_PROMPT),
-            help        = STRING_TOKEN(STR_DISPLAY_VMODES_HELP),
-            flags       = NUMERIC_SIZE_4 | INTERACTIVE | RESET_REQUIRED,
-            option text = STRING_TOKEN(STR_DISPLAY_VMODES_ENABLE), value = 1, flags = DEFAULT;
-            option text = STRING_TOKEN(STR_DISPLAY_VMODES_DISABLE), value = 0, flags = 0;
-        endoneof;
+        checkbox varid = DisplayEnableScaledVModes.v640,
+            prompt      = STRING_TOKEN(STR_DISPLAY_VMODES_640_PROMPT),
+            help        = STRING_TOKEN(STR_DISPLAY_VMODES_640_HELP),
+            flags       = CHECKBOX_DEFAULT | CHECKBOX_DEFAULT_MFG | RESET_REQUIRED,
+            default     = TRUE,
+        endcheckbox;
+
+        checkbox varid = DisplayEnableScaledVModes.v800,
+            prompt      = STRING_TOKEN(STR_DISPLAY_VMODES_800_PROMPT),
+            help        = STRING_TOKEN(STR_DISPLAY_VMODES_800_HELP),
+            flags       = CHECKBOX_DEFAULT | CHECKBOX_DEFAULT_MFG | RESET_REQUIRED,
+            default     = TRUE,
+        endcheckbox;
+
+        checkbox varid = DisplayEnableScaledVModes.v1024,
+            prompt      = STRING_TOKEN(STR_DISPLAY_VMODES_1024_PROMPT),
+            help        = STRING_TOKEN(STR_DISPLAY_VMODES_1024_HELP),
+            flags       = CHECKBOX_DEFAULT | CHECKBOX_DEFAULT_MFG | RESET_REQUIRED,
+            default     = TRUE,
+        endcheckbox;
+
+        checkbox varid = DisplayEnableScaledVModes.v720p,
+            prompt      = STRING_TOKEN(STR_DISPLAY_VMODES_720_PROMPT),
+            help        = STRING_TOKEN(STR_DISPLAY_VMODES_720_HELP),
+            flags       = CHECKBOX_DEFAULT | CHECKBOX_DEFAULT_MFG | RESET_REQUIRED,
+            default     = TRUE,
+        endcheckbox;
+
+        checkbox varid = DisplayEnableScaledVModes.v1080p,
+            prompt      = STRING_TOKEN(STR_DISPLAY_VMODES_1080_PROMPT),
+            help        = STRING_TOKEN(STR_DISPLAY_VMODES_1080_HELP),
+            flags       = CHECKBOX_DEFAULT | CHECKBOX_DEFAULT_MFG | RESET_REQUIRED,
+            default     = TRUE,
+        endcheckbox;
+
+        checkbox varid = DisplayEnableScaledVModes.Physical,
+            prompt      = STRING_TOKEN(STR_DISPLAY_VMODES_REAL_PROMPT),
+            help        = STRING_TOKEN(STR_DISPLAY_VMODES_REAL_HELP),
+            flags       = CHECKBOX_DEFAULT | CHECKBOX_DEFAULT_MFG | RESET_REQUIRED,
+            default     = TRUE,
+        endcheckbox;
 
         oneof varid = DisplayEnableSShot.Enable,
             prompt      = STRING_TOKEN(STR_DISPLAY_SSHOT_PROMPT),
@@ -365,6 +438,14 @@ formset
             flags       = NUMERIC_SIZE_4 | INTERACTIVE | RESET_REQUIRED,
             option text = STRING_TOKEN(STR_DISPLAY_SSHOT_ENABLE), value = 1, flags = DEFAULT;
             option text = STRING_TOKEN(STR_DISPLAY_SSHOT_DISABLE), value = 0, flags = 0;
+        endoneof;
+
+        oneof varid = DisplayLogoIndex.Index,
+            prompt      = STRING_TOKEN(STR_DISPLAY_LOGO_PROMPT),
+            help        = STRING_TOKEN(STR_DISPLAY_LOGO_HELP),
+            flags       = NUMERIC_SIZE_1 | INTERACTIVE | RESET_REQUIRED,
+            option text = STRING_TOKEN(STR_DISPLAY_LOGO_0), value = 0, flags = DEFAULT;
+            option text = STRING_TOKEN(STR_DISPLAY_LOGO_1), value = 1, flags = 0;
         endoneof;
     endform;
 

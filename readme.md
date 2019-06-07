@@ -1,7 +1,7 @@
 64-bit Tiano Core UEFI for the Raspberry Pi 3
 =============================================
 
-Last updated Jan 16th, 2018.
+Last updated Feb 18th, 2018.
 
 This is a port of 64-bit Tiano Core UEFI firmware for the Pi 3/3B+ platforms,
 based on [Ard Bisheuvel's 64-bit](http://www.workofard.com/2017/02/uefi-on-the-pi/)
@@ -19,7 +19,7 @@ good enough for most kinds of UEFI development and good enough for running real 
 systems. It has been validated to install and boot Linux (SUSE, Ubuntu), NetBSD and
 FreeBSD, and there is experimental (64-bit) Windows on Arm support as well.
 It wound up being the early development platform for NetBSD's 64-bit Arm UEFI
-bootloader.
+bootloader, and was used to demonstrate VMware ESXi-Arm on the Pi as well.
 
 It's mostly EBBR compliant, favoring user experience over pedantic compliance
 where those two are in conflict. With enough HypDxe grease it may even, some day,
@@ -27,7 +27,8 @@ pass for an SBSA + SBBR system ;-).
 
 # Latest Status
 
-* 2019 Jam 16th: boot options fixes, _CCA, supported firmware for Windows MCCI driver.
+* 2018 Feb 18th: DisplayDxe fixes, updated DTB
+* 2019 Jan 16th: boot options fixes, _CCA, supported firmware for Windows MCCI driver.
 * 2019 Jan 14th: boot option cleanup, EBC, release, SPCR fix (Windows EMS support)
 * 2018 Nov 17th: Display, USB, GraphicsConsole, VirtualRealTimeClockLib improvements, edk2 rebase.
 * 2018 Oct 1st: Rhxp and PEP devices in ACPI, (untested) JTAG support via debug configuration menu.
@@ -416,9 +417,7 @@ More-or-less matches MS-IoT ones. Good enough to boot WinPE, but unclear how fun
 
 # Licensing
 
-All of the code is BSD licensed, with the exception of:
-1) `DwUsbHostDxe`, which I've documented as being GPL 2.0 licensed, since
-   it appears to be directly related to the U-Boot driver.
+All of the code is BSD licensed.
 
 # Contact
 

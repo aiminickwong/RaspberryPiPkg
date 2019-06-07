@@ -97,6 +97,7 @@ SetupVariables (
   )
 {
   UINTN Size;
+  UINT8 Var8;
   UINT32 Var32;
   EFI_STATUS Status;
 
@@ -144,6 +145,14 @@ SetupVariables (
                             NULL,  &Size, &Var32);
   if (EFI_ERROR (Status)) {
     PcdSet32 (PcdCpuClock, PcdGet32 (PcdCpuClock));
+  }
+
+  Size = sizeof (UINT32);
+  Status = gRT->GetVariable(L"CustomCpuClockRate",
+                            &gConfigDxeFormSetGuid,
+                            NULL,  &Size, &Var32);
+  if (EFI_ERROR (Status)) {
+    PcdSet32 (PcdCustomCpuClockRate, PcdGet32 (PcdCustomCpuClockRate));
   }
 
   Size = sizeof (UINT32);
@@ -210,12 +219,13 @@ SetupVariables (
     PcdSet32 (PcdDebugShowUEFIExit, PcdGet32 (PcdDebugShowUEFIExit));
   }
 
-  Size = sizeof (UINT32);
-  Status = gRT->GetVariable(L"DisplayEnableVModes",
+  Size = sizeof (UINT8);
+  Status = gRT->GetVariable(L"DisplayEnableScaledVModes",
                             &gConfigDxeFormSetGuid,
-                            NULL,  &Size, &Var32);
+                            NULL,  &Size, &Var8);
   if (EFI_ERROR (Status)) {
-    PcdSet32 (PcdDisplayEnableVModes, PcdGet32 (PcdDisplayEnableVModes));
+    PcdSet8 (PcdDisplayEnableScaledVModes,
+              PcdGet8 (PcdDisplayEnableScaledVModes));
   }
 
   Size = sizeof (UINT32);
@@ -224,6 +234,14 @@ SetupVariables (
                             NULL,  &Size, &Var32);
   if (EFI_ERROR (Status)) {
     PcdSet32 (PcdDisplayEnableSShot, PcdGet32 (PcdDisplayEnableSShot));
+  }
+
+  Size = sizeof (UINT8);
+  Status = gRT->GetVariable(L"DisplayLogoIndex",
+                            &gConfigDxeFormSetGuid,
+                            NULL,  &Size, &Var8);
+  if (EFI_ERROR (Status)) {
+    PcdSet8 (PcdDisplayLogoIndex, PcdGet8 (PcdDisplayLogoIndex));
   }
 
   return EFI_SUCCESS;
@@ -239,6 +257,7 @@ ApplyVariables (
   UINTN Gpio48Group;
   EFI_STATUS Status;
   UINT32 CpuClock = PcdGet32 (PcdCpuClock);
+  UINT32 CustomCpuClockRate = PcdGet32 (PcdCustomCpuClockRate);
   UINT32 Rate = 0;
 
   if (CpuClock != 0) {
@@ -252,6 +271,8 @@ ApplyVariables (
         DEBUG((EFI_D_ERROR, "Couldn't get the max CPU speed, leaving as is: %r\n",
                Status));
       }
+    } else if (CpuClock == 3) {
+      Rate = CustomCpuClockRate * 1000000;
     } else {
       Rate = 600 * 1000000;
     }
@@ -259,7 +280,7 @@ ApplyVariables (
 
   if (Rate != 0) {
     DEBUG((EFI_D_INFO, "Setting CPU speed to %uHz\n", Rate));
-    Status = mFwProtocol->SetClockRate(RPI_FW_CLOCK_RATE_ARM, Rate);
+    Status = mFwProtocol->SetClockRate(RPI_FW_CLOCK_RATE_ARM, Rate, 1);
     if (Status != EFI_SUCCESS) {
       DEBUG((EFI_D_ERROR, "Couldn't set the CPU speed: %r\n",
              Status));
